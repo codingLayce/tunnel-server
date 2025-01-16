@@ -1,8 +1,9 @@
 package service
 
 import (
-	"github.com/codingLayce/tunnel/tcp"
 	"sync"
+
+	"github.com/codingLayce/tunnel/tcp"
 )
 
 type Server struct {
