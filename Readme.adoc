@@ -1,0 +1,14 @@
+= Tunnel-server
+
+Tunnel-server a server that manages `Tunnels`. A `Tunnel` is a pool of data where clients can listen to and pull the stored messages.
+
+Tunnel uses a custom protocol based on top of `tcp`. For more details, see the `github.com/codingLayce/tunnel` repository.
+
+== Usage
+
+Starts a Tunnel server.
+
+[source]
+----
+tunnel
+----
