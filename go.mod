@@ -3,7 +3,7 @@ module tunnel-server
 go 1.23.1
 
 require (
-	github.com/codingLayce/tunnel v0.0.0-00010101000000-000000000000
+	github.com/codingLayce/tunnel.go v0.0.0
 	github.com/spf13/cobra v1.8.1
 )
 
@@ -13,4 +13,4 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 )
 
-replace github.com/codingLayce/tunnel => ../tunnel
+replace github.com/codingLayce/tunnel.go => ../tunnel.go
