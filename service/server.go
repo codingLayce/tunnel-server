@@ -3,7 +3,7 @@ package service
 import (
 	"sync"
 
-	"github.com/codingLayce/tunnel/tcp"
+	"github.com/codingLayce/tunnel.go/tcp"
 )
 
 type Server struct {
