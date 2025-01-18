@@ -7,15 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tunnel-server/service"
+	"tunnel-server/server"
 )
 
 var rootCmd = &cobra.Command{
 	Short: "Start a Tunnel server",
 	Run: func(cmd *cobra.Command, args []string) {
-		server := service.NewServer(":19917")
+		srv := server.NewServer(":19917")
 
-		err := server.Start()
+		err := srv.Start()
 		if err != nil {
 			slog.Error("Cannot start server", "error", err)
 			os.Exit(1)
@@ -28,8 +28,8 @@ var rootCmd = &cobra.Command{
 		select {
 		case <-signalChan:
 			slog.Info("Received signal. Stopping server")
-			server.Stop()
-		case <-server.Done():
+			srv.Stop()
+		case <-srv.Done():
 			slog.Error("Server stopped it self")
 		}
 		slog.Info("Tunnel server stopped")
