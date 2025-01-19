@@ -24,17 +24,28 @@ type Scheduler struct {
 	mtx sync.Mutex
 }
 
-func (s *Scheduler) storeTunnel(tunnel tunnel.Tunnel) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.tunnels[tunnel.Name()] = tunnel
+func StopAllListen(clientID string) {
+	scheduler.stopAllListenOfClient(clientID)
+	scheduler.logger.Info("Client stopped listening to Tunnels", "client_id", clientID)
 }
 
-func (s *Scheduler) tunnelExists(name string) bool {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	_, ok := s.tunnels[name]
-	return ok
+func ListenTunnel(name, clientID string) error {
+	logger := scheduler.logger.With("tunnel_name", name)
+	logger.Debug("Listen Tunnel")
+
+	if !scheduler.tunnelExists(name) {
+		logger.Warn("Unknown Tunnel")
+		return fmt.Errorf("unknown tunnel %q", name)
+	}
+
+	tun := scheduler.getTunnel(name)
+	err := tun.RegisterListener(clientID)
+	if err != nil {
+		logger.Warn("Cannot listen Tunnel", "error", err)
+		return fmt.Errorf("register listener: %w", err)
+	}
+
+	return nil
 }
 
 func CreateBroadcastTunnel(name string) error {
@@ -52,4 +63,33 @@ func CreateBroadcastTunnel(name string) error {
 	logger.Info("Broadcast Tunnel created")
 
 	return nil
+}
+
+func (s *Scheduler) storeTunnel(tunnel tunnel.Tunnel) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	s.tunnels[tunnel.Name()] = tunnel
+}
+
+func (s *Scheduler) getTunnel(name string) tunnel.Tunnel {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	return s.tunnels[name]
+}
+
+func (s *Scheduler) tunnelExists(name string) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	_, ok := s.tunnels[name]
+	return ok
+}
+
+func (s *Scheduler) stopAllListenOfClient(clientID string) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, tun := range s.tunnels {
+		// The client might not be listening that one but, it won't fail.
+		// Maybe refactor later to only get the Tunnels the client is listening.
+		tun.UnregisterListener(clientID)
+	}
 }

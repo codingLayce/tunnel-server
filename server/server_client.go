@@ -37,16 +37,29 @@ func (s *serverClient) payloadReceived(payload []byte) {
 	switch castedCMD := cmd.(type) {
 	case *command.CreateTunnel:
 		s.handleCreateTunnelCmd(logger, castedCMD)
+	case *command.ListenTunnel:
+		s.handleListenTunnel(logger, castedCMD)
 	default:
 		logger.Warn("Unsupported command. Ignoring it")
 	}
+}
+
+func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.ListenTunnel) {
+	err := scheduler.ListenTunnel(cmd.Name, s.conn.ID)
+	if err != nil {
+		logger.Warn("Cannot listen Tunnel", "error", err)
+		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
+		return
+	}
+	logger.Info("Listen Tunnel")
+	s.ack(logger, cmd.TransactionID())
 }
 
 func (s *serverClient) handleCreateTunnelCmd(logger *slog.Logger, cmd *command.CreateTunnel) {
 	err := scheduler.CreateBroadcastTunnel(cmd.Name)
 	if err != nil {
 		logger.Warn("Cannot create broadcast Tunnel", "error", err)
-		s.nack(logger, cmd.TransactionID())
+		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
 	}
 	logger.Info("Broadcast Tunnel created")
@@ -82,6 +95,8 @@ func (s *serverClient) connected() {
 }
 
 func (s *serverClient) disconnected(timeout bool) {
+	s.logger.Info("Disconnecting...")
+	scheduler.StopAllListen(s.conn.ID)
 	if timeout {
 		s.logger.Info("Timeout. Disconnected")
 	} else {
