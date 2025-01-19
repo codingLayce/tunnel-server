@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"tunnel-server/server"
+	"github.com/codingLayce/tunnel-server/server"
 )
 
-var rootCmd = &cobra.Command{
+var RootCmd = &cobra.Command{
 	Short: "Start a Tunnel server",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		srv := server.NewServer(":19917")
 
 		err := srv.Start()
@@ -37,5 +37,5 @@ var rootCmd = &cobra.Command{
 }
 
 func Exec() {
-	rootCmd.Execute()
+	RootCmd.Execute()
 }

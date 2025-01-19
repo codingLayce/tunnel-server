@@ -3,10 +3,10 @@ package server
 import (
 	"log/slog"
 
+	"github.com/codingLayce/tunnel-server/scheduler"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
 	"github.com/codingLayce/tunnel.go/tcp"
-	"tunnel-server/scheduler"
 )
 
 type serverClient struct {
@@ -26,7 +26,7 @@ func (s *serverClient) payloadReceived(payload []byte) {
 
 	cmd, err := pdu.Unmarshal(payload)
 	if err != nil {
-		s.logger.Warn("Unparsable payload", "error", err)
+		s.logger.Warn("Unparsable payload. Ignoring it", "error", err)
 		return
 	}
 

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"tunnel-server/tunnel"
+	"github.com/codingLayce/tunnel-server/tunnel"
 )
 
 var scheduler = &Scheduler{

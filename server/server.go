@@ -56,6 +56,10 @@ func (s *Server) Stop() {
 	s.internal.Stop()
 }
 
+func (s *Server) Addr() string {
+	return s.internal.Addr()
+}
+
 func (s *Server) Done() <-chan struct{} {
 	return s.internal.Done()
 }

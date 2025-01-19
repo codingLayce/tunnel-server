@@ -1,4 +1,4 @@
-module tunnel-server
+module github.com/codingLayce/tunnel-server
 
 go 1.23.1
 

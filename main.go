@@ -3,7 +3,7 @@ package main
 import (
 	"log/slog"
 
-	"tunnel-server/cmd"
+	"github.com/codingLayce/tunnel-server/cmd"
 )
 
 func main() {
