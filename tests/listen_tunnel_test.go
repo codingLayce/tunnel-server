@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/codingLayce/tunnel-server/scheduler"
@@ -25,6 +26,13 @@ func TestListenTunnel(t *testing.T) {
 	require.NoError(t, err)
 
 	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
+
+	err = scheduler.PublishMessage("SomeID", "BTunnel", "Un message de ouf")
+	require.NoError(t, err)
+
+	tunnelName, msg := shouldReceiveMessageBefore(t, cli, 100*time.Millisecond)
+	assert.Equal(t, "BTunnel", tunnelName)
+	assert.Equal(t, "Un message de ouf", msg)
 }
 
 func TestListenTunnel_TunnelDoesntExists(t *testing.T) {

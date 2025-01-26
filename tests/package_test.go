@@ -42,3 +42,15 @@ func shouldReceiveNackBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.
 		assert.FailNow(t, "Nack command should have been received")
 	}
 }
+
+func shouldReceiveMessageBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) (tunnelName, message string) {
+	select {
+	case cmd := <-cli.Commands():
+		receiveMessage, ok := cmd.(*command.ReceiveMessage)
+		assert.True(t, ok, "Command should be a ReceiveMessage")
+		return receiveMessage.TunnelName, receiveMessage.Message
+	case <-time.After(timeout):
+		assert.FailNow(t, "Nack command should have been received")
+	}
+	return "", ""
+}

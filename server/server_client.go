@@ -39,13 +39,27 @@ func (s *serverClient) payloadReceived(payload []byte) {
 		s.handleCreateTunnelCmd(logger, castedCMD)
 	case *command.ListenTunnel:
 		s.handleListenTunnel(logger, castedCMD)
+	case *command.PublishMessage:
+		s.handlePublishMessage(logger, castedCMD)
 	default:
 		logger.Warn("Unsupported command. Ignoring it")
 	}
 }
 
+func (s *serverClient) handlePublishMessage(logger *slog.Logger, cmd *command.PublishMessage) {
+	err := scheduler.PublishMessage(s.conn.ID, cmd.TunnelName, cmd.Message)
+	if err != nil {
+		logger.Warn("Cannot publish message", "error", err)
+		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
+		return
+	}
+
+	logger.Info("Message published to Tunnel", "tunnel_name", cmd.TunnelName)
+	s.ack(logger, cmd.TransactionID())
+}
+
 func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.ListenTunnel) {
-	err := scheduler.ListenTunnel(cmd.Name, s.conn.ID)
+	err := scheduler.ListenTunnel(cmd.Name, s.conn.ID, s.notifyMessageForTunnel)
 	if err != nil {
 		logger.Warn("Cannot listen Tunnel", "error", err)
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
@@ -74,6 +88,7 @@ func (s *serverClient) ack(logger *slog.Logger, transactionID string) {
 	_, err := s.conn.Write(payload)
 	if err != nil {
 		logger.Error("Cannot send ack", "error", err)
+		return
 	}
 	logger.Info("Ack sent")
 }
@@ -86,6 +101,7 @@ func (s *serverClient) nack(logger *slog.Logger, transactionID string) {
 	_, err := s.conn.Write(payload)
 	if err != nil {
 		logger.Error("Cannot send nack", "error", err)
+		return
 	}
 	logger.Info("Nack sent")
 }
@@ -102,4 +118,28 @@ func (s *serverClient) disconnected(timeout bool) {
 	} else {
 		s.logger.Info("Disconnected")
 	}
+}
+
+func (s *serverClient) notifyMessageForTunnel(tunnel, msg string) {
+	logger := s.logger.With("tunnel_name", tunnel)
+	logger.Info("Notifying message for Tunnel", "tunnel_name", tunnel)
+
+	cmd := command.NewReceiveMessage(tunnel, msg)
+	err := cmd.Validate()
+	if err != nil {
+		logger.Error("Cannot validate receive message command", "error", err)
+		return
+	}
+
+	payload := pdu.Marshal(cmd)
+	logger.Debug("Sending payload", "payload", payload)
+
+	// TODO: Configure Write timeout
+	_, err = s.conn.Write(payload)
+	if err != nil {
+		logger.Error("Cannot send message", "error", err)
+		return
+	}
+
+	// TODO: Wait for ACK
 }

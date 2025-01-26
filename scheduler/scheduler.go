@@ -24,12 +24,26 @@ type Scheduler struct {
 	mtx sync.Mutex
 }
 
+func PublishMessage(clientID, tunnelName, msg string) error {
+	logger := scheduler.logger.With("tunnel_name", tunnelName)
+
+	if !scheduler.tunnelExists(tunnelName) {
+		logger.Warn("Unknown Tunnel")
+		return fmt.Errorf("unknown tunnel %q", tunnelName)
+	}
+	tun := scheduler.getTunnel(tunnelName)
+	tun.PublishMessage(clientID, msg)
+
+	logger.Info("Message published to the Tunnel")
+	return nil
+}
+
 func StopAllListen(clientID string) {
 	scheduler.stopAllListenOfClient(clientID)
 	scheduler.logger.Info("Client stopped listening to Tunnels", "client_id", clientID)
 }
 
-func ListenTunnel(name, clientID string) error {
+func ListenTunnel(name, clientID string, callback func(tunnelName, msg string)) error {
 	logger := scheduler.logger.With("tunnel_name", name)
 	logger.Debug("Listen Tunnel")
 
@@ -39,7 +53,7 @@ func ListenTunnel(name, clientID string) error {
 	}
 
 	tun := scheduler.getTunnel(name)
-	err := tun.RegisterListener(clientID)
+	err := tun.RegisterListener(clientID, callback)
 	if err != nil {
 		logger.Warn("Cannot listen Tunnel", "error", err)
 		return fmt.Errorf("register listener: %w", err)
