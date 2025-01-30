@@ -8,8 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/codingLayce/tunnel-server/scheduler"
+	"github.com/codingLayce/tunnel-server/server"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
+	"github.com/codingLayce/tunnel.go/test-helper/mock"
 )
 
 // /!\ State is kept during all tests execution /!\
@@ -27,12 +29,66 @@ func TestListenTunnel(t *testing.T) {
 
 	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
 
-	err = scheduler.PublishMessage("SomeID", "BTunnel", "Un message de ouf")
-	require.NoError(t, err)
+	go func() { // PublishMessage will be waiting for the client's ack. So it will block the ack if in the same goroutine.
+		err = scheduler.PublishMessage("SomeID", "BTunnel", "Un message de ouf")
+		require.NoError(t, err)
+	}()
 
-	tunnelName, msg := shouldReceiveMessageBefore(t, cli, 100*time.Millisecond)
+	tunnelName, msg := shouldReceiveMessageAndAckBefore(t, cli, 100*time.Millisecond)
 	assert.Equal(t, "BTunnel", tunnelName)
 	assert.Equal(t, "Un message de ouf", msg)
+}
+
+func TestListenTunnel_NackMessage(t *testing.T) {
+	err := scheduler.CreateBroadcastTunnel("BTunnelNack")
+	require.NoError(t, err)
+
+	srv, cli := setupServerAndClient(t)
+	defer srv.Stop()
+	defer cli.Stop()
+
+	err = cli.Send(pdu.Marshal(command.NewListenTunnel("BTunnelNack")))
+	require.NoError(t, err)
+
+	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
+
+	go func() { // PublishMessage will be waiting for the client's ack. So it will block the ack if in the same goroutine.
+		err = scheduler.PublishMessage("SomeID2", "BTunnelNack", "Un message de ouf")
+		require.NoError(t, err)
+	}()
+
+	tunnelName, msg := shouldReceiveMessageAndNackBefore(t, cli, 100*time.Millisecond)
+	assert.Equal(t, "BTunnelNack", tunnelName)
+	assert.Equal(t, "Un message de ouf", msg)
+}
+
+func TestListenTunnel_AckTimeout(t *testing.T) {
+	mock.Do(t, &server.MessageAckTimeout, time.Second)
+	err := scheduler.CreateBroadcastTunnel("BTunnelTimeout")
+	require.NoError(t, err)
+
+	srv, cli := setupServerAndClient(t)
+	defer srv.Stop()
+	defer cli.Stop()
+
+	err = cli.Send(pdu.Marshal(command.NewListenTunnel("BTunnelTimeout")))
+	require.NoError(t, err)
+
+	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
+
+	go func() {
+		err = scheduler.PublishMessage("SomeID3", "BTunnelTimeout", "Un message de ouf")
+		require.NoError(t, err)
+	}()
+
+	// Wait for message and doesn't respond
+	select {
+	case cmd := <-cli.Commands():
+		_, ok := cmd.(*command.ReceiveMessage)
+		assert.True(t, ok, "Command should be a ReceiveMessage")
+	case <-time.After(10 * time.Millisecond):
+		assert.FailNow(t, "Nack command should have been received")
+	}
 }
 
 func TestListenTunnel_TunnelDoesntExists(t *testing.T) {

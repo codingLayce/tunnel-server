@@ -9,6 +9,7 @@ import (
 
 	"github.com/codingLayce/tunnel-server/server"
 	"github.com/codingLayce/tunnel-server/tests/helpers"
+	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
 )
 
@@ -43,11 +44,27 @@ func shouldReceiveNackBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.
 	}
 }
 
-func shouldReceiveMessageBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) (tunnelName, message string) {
+func shouldReceiveMessageAndAckBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) (tunnelName, message string) {
 	select {
 	case cmd := <-cli.Commands():
 		receiveMessage, ok := cmd.(*command.ReceiveMessage)
 		assert.True(t, ok, "Command should be a ReceiveMessage")
+		err := cli.Send(pdu.Marshal(command.NewAckWithTransactionID(cmd.TransactionID())))
+		require.NoError(t, err)
+		return receiveMessage.TunnelName, receiveMessage.Message
+	case <-time.After(timeout):
+		assert.FailNow(t, "Nack command should have been received")
+	}
+	return "", ""
+}
+
+func shouldReceiveMessageAndNackBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) (tunnelName, message string) {
+	select {
+	case cmd := <-cli.Commands():
+		receiveMessage, ok := cmd.(*command.ReceiveMessage)
+		assert.True(t, ok, "Command should be a ReceiveMessage")
+		err := cli.Send(pdu.Marshal(command.NewNackWithTransactionID(cmd.TransactionID())))
+		require.NoError(t, err)
 		return receiveMessage.TunnelName, receiveMessage.Message
 	case <-time.After(timeout):
 		assert.FailNow(t, "Nack command should have been received")
