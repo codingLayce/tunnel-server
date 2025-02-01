@@ -1,9 +1,8 @@
 package server
 
 import (
-	"sync"
-
 	"github.com/codingLayce/tunnel-server/tunnel"
+	"github.com/codingLayce/tunnel.go/common/maps"
 	"github.com/codingLayce/tunnel.go/tcp"
 )
 
@@ -11,14 +10,12 @@ type Server struct {
 	internal *tcp.Server
 
 	// TODO: Migrate to maps.SyncMap
-	clients map[string]*serverClient
-
-	mtx sync.Mutex
+	clients *maps.SyncMap[string, *serverClient]
 }
 
 func NewServer(addr string) *Server {
 	srv := &Server{
-		clients: make(map[string]*serverClient),
+		clients: maps.NewSyncMap[string, *serverClient](),
 	}
 	srv.internal = tcp.NewServer(&tcp.ServerOption{
 		Addr:                 addr,
@@ -31,23 +28,26 @@ func NewServer(addr string) *Server {
 }
 
 func (s *Server) connectionReceived(conn *tcp.Connection) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.clients[conn.ID] = newServerClient(conn)
-	s.clients[conn.ID].connected()
+	srvClient := newServerClient(conn)
+	s.clients.Put(conn.ID, srvClient)
+	srvClient.connected()
 }
 
 func (s *Server) connectionClosed(conn *tcp.Connection, timeout bool) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.clients[conn.ID].disconnected(timeout)
-	delete(s.clients, conn.ID)
+	srvClient, exists := s.clients.Get(conn.ID)
+	if !exists {
+		return
+	}
+	srvClient.disconnected(timeout)
+	s.clients.Delete(conn.ID)
 }
 
 func (s *Server) payloadReceived(conn *tcp.Connection, payload []byte) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-	s.clients[conn.ID].payloadReceived(payload)
+	srvClient, exists := s.clients.Get(conn.ID)
+	if !exists {
+		return
+	}
+	srvClient.payloadReceived(payload)
 }
 
 func (s *Server) Start() error {
