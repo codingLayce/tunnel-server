@@ -27,7 +27,7 @@ func (b *Broadcaster) PublishMessage(senderID, msg string) {
 			continue
 		}
 		listener(msg)
-		// TODO: Maybe mange here net.Conn and timeout/retry mechanism
+		// TODO: Maybe manage here net.Conn and timeout/retry mechanism
 	}
 }
 

@@ -30,7 +30,7 @@ func newServerClient(conn *tcp.Connection) *serverClient {
 		conn:       conn,
 		ackWaiters: maps.NewSyncMap[string, chan bool](),
 		close:      make(chan struct{}),
-		logger:     slog.Default().With("entity", "CLIENT", "client", conn.ID),
+		logger:     slog.Default().With("client", conn.ID),
 	}
 }
 
@@ -44,12 +44,12 @@ func (s *serverClient) payloadReceived(payload []byte) {
 	}
 
 	// Contextual logger for the command's process
-	logger := s.logger.With("command", cmd.Info(), "transaction_id", cmd.TransactionID())
-	logger.Info("Command parsed")
+	logger := s.logger.With("transaction_id", cmd.TransactionID(), "command", cmd.Info())
+	logger.Debug("Command parsed")
 
 	switch castedCMD := cmd.(type) {
 	case *command.CreateTunnel:
-		s.handleCreateTunnelCmd(logger, castedCMD)
+		s.handleCreateTunnel(logger, castedCMD)
 	case *command.ListenTunnel:
 		s.handleListenTunnel(logger, castedCMD)
 	case *command.PublishMessage:
@@ -82,8 +82,8 @@ func (s *serverClient) handlePublishMessage(logger *slog.Logger, cmd *command.Pu
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
 	}
-	logger.Info("Message published to Tunnel", "tunnel_name", cmd.TunnelName)
 	s.ack(logger, cmd.TransactionID())
+	logger.Info("Message published to Tunnel", "tunnel_name", cmd.TunnelName)
 }
 
 func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.ListenTunnel) {
@@ -93,26 +93,24 @@ func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.List
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
 	}
-	logger.Info("Listen Tunnel")
 	s.ack(logger, cmd.TransactionID())
+	logger.Info("Listen Tunnel")
 }
 
-func (s *serverClient) handleCreateTunnelCmd(logger *slog.Logger, cmd *command.CreateTunnel) {
+func (s *serverClient) handleCreateTunnel(logger *slog.Logger, cmd *command.CreateTunnel) {
 	err := scheduler.CreateBroadcastTunnel(cmd.Name)
 	if err != nil {
 		logger.Warn("Cannot create broadcast Tunnel", "error", err)
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
 	}
-	logger.Info("Broadcast Tunnel created")
 	s.ack(logger, cmd.TransactionID())
+	logger.Info("Broadcast Tunnel created")
 }
 
 func (s *serverClient) notifyMessageForTunnel(tunnelName, msg string) {
 	cmd := command.NewReceiveMessage(tunnelName, msg)
-
-	logger := s.logger.With("command", cmd.Info(), "transaction_id", cmd.TransactionID())
-	logger.Info("Notifying message for Tunnel")
+	logger := s.logger.With("transaction_id", cmd.TransactionID(), "command", cmd.Info())
 
 	err := cmd.Validate()
 	if err != nil {
@@ -135,12 +133,14 @@ func (s *serverClient) notifyMessageForTunnel(tunnelName, msg string) {
 		return
 	}
 
+	logger.Info("Message sent")
+
 	select {
 	case isAck := <-ackCh:
 		if isAck {
-			logger.Info("Message acked")
+			logger.Info("Message acked by client")
 		} else {
-			logger.Info("Message nacked")
+			logger.Info("Message nacked by client")
 		}
 	case <-time.After(MessageAckTimeout):
 		logger.Warn("Timeout waiting for client ack. Discard message")
@@ -157,7 +157,7 @@ func (s *serverClient) ack(logger *slog.Logger, transactionID string) {
 		logger.Error("Cannot send ack", "error", err)
 		return
 	}
-	logger.Info("Ack sent")
+	logger.Debug("Ack sent")
 }
 
 func (s *serverClient) nack(logger *slog.Logger, transactionID string) {
@@ -179,7 +179,6 @@ func (s *serverClient) connected() {
 
 func (s *serverClient) disconnected(timeout bool) {
 	close(s.close)
-	s.logger.Info("Disconnecting...")
 	scheduler.StopAllListen(s.conn.ID)
 	if timeout {
 		s.logger.Info("Timeout. Disconnected")

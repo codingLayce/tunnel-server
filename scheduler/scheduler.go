@@ -25,7 +25,7 @@ func PublishMessage(clientID, tunnelName, msg string) error {
 	if !exists {
 		return fmt.Errorf("unknown tunnel %q", tunnelName)
 	}
-	tun.PublishMessage(clientID, msg)
+	go tun.PublishMessage(clientID, msg) // TODO: Better management of this go routine
 	return nil
 }
 
