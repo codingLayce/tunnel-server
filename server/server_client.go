@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/codingLayce/tunnel-server/scheduler"
+	"github.com/codingLayce/tunnel-server/tunnel"
 	"github.com/codingLayce/tunnel.go/common/maps"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
@@ -32,6 +32,45 @@ func newServerClient(conn *tcp.Connection) *serverClient {
 		close:      make(chan struct{}),
 		logger:     slog.Default().With("client", conn.ID),
 	}
+}
+
+func (s *serverClient) NotifyMessage(tunnelName, msg string) {
+	cmd := command.NewReceiveMessage(tunnelName, msg)
+	logger := s.logger.With("transaction_id", cmd.TransactionID())
+
+	if err := cmd.Validate(); err != nil {
+		logger.Error("Cannot validate receive message command", "error", err)
+		return
+	}
+
+	payload := pdu.Marshal(cmd)
+	logger.Debug("Sending payload", "payload", payload)
+
+	ackCh := make(chan bool)
+	s.ackWaiters.Put(cmd.TransactionID(), ackCh)
+	defer s.ackWaiters.Delete(cmd.TransactionID())
+
+	// TODO: Configure Write timeout
+	if _, err := s.conn.Write(payload); err != nil {
+		return
+	}
+
+	logger.Info("Message sent")
+
+	select {
+	case isAck := <-ackCh:
+		if isAck {
+			logger.Info("Message acked by client")
+		} else {
+			logger.Info("Message nacked by client")
+		}
+	case <-time.After(MessageAckTimeout):
+		logger.Warn("Timeout waiting for client ack. Discard message")
+	}
+}
+
+func (s *serverClient) ID() string {
+	return s.conn.ID
 }
 
 func (s *serverClient) payloadReceived(payload []byte) {
@@ -76,8 +115,7 @@ func (s *serverClient) handleAcknowledgement(logger *slog.Logger, transactionID 
 }
 
 func (s *serverClient) handlePublishMessage(logger *slog.Logger, cmd *command.PublishMessage) {
-	err := scheduler.PublishMessage(s.conn.ID, cmd.TunnelName, cmd.Message)
-	if err != nil {
+	if err := tunnel.PublishMessage(s.ID(), cmd.TunnelName, cmd.Message); err != nil {
 		logger.Warn("Cannot publish message", "error", err)
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
@@ -87,8 +125,7 @@ func (s *serverClient) handlePublishMessage(logger *slog.Logger, cmd *command.Pu
 }
 
 func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.ListenTunnel) {
-	err := scheduler.ListenTunnel(cmd.Name, s.conn.ID, s.notifyMessageForTunnel)
-	if err != nil {
+	if err := tunnel.Listen(cmd.Name, s); err != nil {
 		logger.Warn("Cannot listen Tunnel", "error", err)
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
@@ -98,8 +135,7 @@ func (s *serverClient) handleListenTunnel(logger *slog.Logger, cmd *command.List
 }
 
 func (s *serverClient) handleCreateTunnel(logger *slog.Logger, cmd *command.CreateTunnel) {
-	err := scheduler.CreateBroadcastTunnel(cmd.Name)
-	if err != nil {
+	if err := tunnel.CreateBroadcast(cmd.Name); err != nil {
 		logger.Warn("Cannot create broadcast Tunnel", "error", err)
 		s.nack(logger, cmd.TransactionID()) // TODO: Add reason to nack
 		return
@@ -108,52 +144,12 @@ func (s *serverClient) handleCreateTunnel(logger *slog.Logger, cmd *command.Crea
 	logger.Info("Broadcast Tunnel created")
 }
 
-func (s *serverClient) notifyMessageForTunnel(tunnelName, msg string) {
-	cmd := command.NewReceiveMessage(tunnelName, msg)
-	logger := s.logger.With("transaction_id", cmd.TransactionID(), "command", cmd.Info())
-
-	err := cmd.Validate()
-	if err != nil {
-		logger.Error("Cannot validate receive message command", "error", err)
-		return
-	}
-
-	payload := pdu.Marshal(cmd)
-	logger.Debug("Sending payload", "payload", payload)
-
-	// Register waiter before sending payload in case of really fast networking (mainly for tests to be honest)
-	ackCh := make(chan bool)
-	s.ackWaiters.Put(cmd.TransactionID(), ackCh)
-	defer s.ackWaiters.Delete(cmd.TransactionID())
-
-	// TODO: Configure Write timeout
-	_, err = s.conn.Write(payload)
-	if err != nil {
-		logger.Error("Cannot send message", "error", err)
-		return
-	}
-
-	logger.Info("Message sent")
-
-	select {
-	case isAck := <-ackCh:
-		if isAck {
-			logger.Info("Message acked by client")
-		} else {
-			logger.Info("Message nacked by client")
-		}
-	case <-time.After(MessageAckTimeout):
-		logger.Warn("Timeout waiting for client ack. Discard message")
-	}
-}
-
 func (s *serverClient) ack(logger *slog.Logger, transactionID string) {
 	payload := pdu.Marshal(command.NewAckWithTransactionID(transactionID))
 	logger.Debug("Sending payload", "payload", payload)
 
 	// TODO: Configure Write timeout
-	_, err := s.conn.Write(payload)
-	if err != nil {
+	if _, err := s.conn.Write(payload); err != nil {
 		logger.Error("Cannot send ack", "error", err)
 		return
 	}
@@ -165,8 +161,7 @@ func (s *serverClient) nack(logger *slog.Logger, transactionID string) {
 	logger.Debug("Sending payload", "payload", payload)
 
 	// TODO: Configure Write timeout
-	_, err := s.conn.Write(payload)
-	if err != nil {
+	if _, err := s.conn.Write(payload); err != nil {
 		logger.Error("Cannot send nack", "error", err)
 		return
 	}
@@ -179,7 +174,7 @@ func (s *serverClient) connected() {
 
 func (s *serverClient) disconnected(timeout bool) {
 	close(s.close)
-	scheduler.StopAllListen(s.conn.ID)
+	tunnel.StopListen(s.ID())
 	if timeout {
 		s.logger.Info("Timeout. Disconnected")
 	} else {

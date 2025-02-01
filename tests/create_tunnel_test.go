@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/codingLayce/tunnel-server/scheduler"
+	"github.com/codingLayce/tunnel-server/tunnel"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
 )
@@ -15,8 +15,8 @@ import (
 
 func TestCreateTunnel(t *testing.T) {
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err := cli.Send(pdu.Marshal(command.NewCreateTunnel("Tunnel")))
 	require.NoError(t, err)
@@ -25,12 +25,12 @@ func TestCreateTunnel(t *testing.T) {
 }
 
 func TestCreateTunnel_TunnelAlreadyExists(t *testing.T) {
-	err := scheduler.CreateBroadcastTunnel("MyTunnel")
+	err := tunnel.CreateBroadcast("MyTunnel")
 	require.NoError(t, err)
 
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err = cli.Send(pdu.Marshal(command.NewCreateTunnel("MyTunnel")))
 	require.NoError(t, err)

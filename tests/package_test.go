@@ -13,15 +13,23 @@ import (
 	"github.com/codingLayce/tunnel.go/pdu/command"
 )
 
-func setupServerAndClient(t *testing.T) (*server.Server, *helpers.ClientSpy) {
+func setupServer(t *testing.T) *server.Server {
 	srv := server.NewServer(":0")
 	err := srv.Start()
 	require.NoError(t, err)
+	return srv
+}
 
-	cli := helpers.NewClientSpy(srv.Addr())
-	err = cli.Connect()
+func setupClient(t *testing.T, addr string) *helpers.ClientSpy {
+	cli := helpers.NewClientSpy(addr)
+	err := cli.Connect()
 	require.NoError(t, err)
-	return srv, cli
+	return cli
+}
+
+func setupServerAndClient(t *testing.T) (*server.Server, *helpers.ClientSpy) {
+	srv := setupServer(t)
+	return srv, setupClient(t, srv.Addr())
 }
 
 func shouldReceiveAckBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) {
@@ -70,4 +78,12 @@ func shouldReceiveMessageAndNackBefore(t *testing.T, cli *helpers.ClientSpy, tim
 		assert.FailNow(t, "Nack command should have been received")
 	}
 	return "", ""
+}
+
+func shouldNotReceiveCommandsBefore(t *testing.T, cli *helpers.ClientSpy, timeout time.Duration) {
+	select {
+	case <-cli.Commands():
+		assert.FailNow(t, "No commands should have been received")
+	case <-time.After(timeout):
+	}
 }

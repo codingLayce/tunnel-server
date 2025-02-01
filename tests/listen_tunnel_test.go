@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/codingLayce/tunnel-server/scheduler"
 	"github.com/codingLayce/tunnel-server/server"
+	"github.com/codingLayce/tunnel-server/tunnel"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
 	"github.com/codingLayce/tunnel.go/test-helper/mock"
@@ -17,12 +17,12 @@ import (
 // /!\ State is kept during all tests execution /!\
 
 func TestListenTunnel(t *testing.T) {
-	err := scheduler.CreateBroadcastTunnel("BTunnel")
+	err := tunnel.CreateBroadcast("BTunnel")
 	require.NoError(t, err)
 
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err = cli.Send(pdu.Marshal(command.NewListenTunnel("BTunnel")))
 	require.NoError(t, err)
@@ -30,7 +30,7 @@ func TestListenTunnel(t *testing.T) {
 	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
 
 	go func() { // PublishMessage will be waiting for the client's ack. So it will block the ack if in the same goroutine.
-		err = scheduler.PublishMessage("SomeID", "BTunnel", "Un message de ouf")
+		err = tunnel.PublishMessage("SomeID", "BTunnel", "Un message de ouf")
 		require.NoError(t, err)
 	}()
 
@@ -40,12 +40,12 @@ func TestListenTunnel(t *testing.T) {
 }
 
 func TestListenTunnel_NackMessage(t *testing.T) {
-	err := scheduler.CreateBroadcastTunnel("BTunnelNack")
+	err := tunnel.CreateBroadcast("BTunnelNack")
 	require.NoError(t, err)
 
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err = cli.Send(pdu.Marshal(command.NewListenTunnel("BTunnelNack")))
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestListenTunnel_NackMessage(t *testing.T) {
 	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
 
 	go func() { // PublishMessage will be waiting for the client's ack. So it will block the ack if in the same goroutine.
-		err = scheduler.PublishMessage("SomeID2", "BTunnelNack", "Un message de ouf")
+		err = tunnel.PublishMessage("SomeID2", "BTunnelNack", "Un message de ouf")
 		require.NoError(t, err)
 	}()
 
@@ -64,12 +64,12 @@ func TestListenTunnel_NackMessage(t *testing.T) {
 
 func TestListenTunnel_AckTimeout(t *testing.T) {
 	mock.Do(t, &server.MessageAckTimeout, time.Second)
-	err := scheduler.CreateBroadcastTunnel("BTunnelTimeout")
+	err := tunnel.CreateBroadcast("BTunnelTimeout")
 	require.NoError(t, err)
 
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err = cli.Send(pdu.Marshal(command.NewListenTunnel("BTunnelTimeout")))
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestListenTunnel_AckTimeout(t *testing.T) {
 	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
 
 	go func() {
-		err = scheduler.PublishMessage("SomeID3", "BTunnelTimeout", "Un message de ouf")
+		err = tunnel.PublishMessage("SomeID3", "BTunnelTimeout", "Un message de ouf")
 		require.NoError(t, err)
 	}()
 
@@ -93,8 +93,8 @@ func TestListenTunnel_AckTimeout(t *testing.T) {
 
 func TestListenTunnel_TunnelDoesntExists(t *testing.T) {
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err := cli.Send(pdu.Marshal(command.NewListenTunnel("UnknownTunnel")))
 	require.NoError(t, err)
@@ -103,12 +103,12 @@ func TestListenTunnel_TunnelDoesntExists(t *testing.T) {
 }
 
 func TestListenTunnel_DoubleListenForSameClient(t *testing.T) {
-	err := scheduler.CreateBroadcastTunnel("TunnelDoubleListen")
+	err := tunnel.CreateBroadcast("TunnelDoubleListen")
 	require.NoError(t, err)
 
 	srv, cli := setupServerAndClient(t)
-	defer srv.Stop()
-	defer cli.Stop()
+	t.Cleanup(srv.Stop)
+	t.Cleanup(cli.Stop)
 
 	err = cli.Send(pdu.Marshal(command.NewListenTunnel("TunnelDoubleListen")))
 	require.NoError(t, err)
@@ -118,5 +118,5 @@ func TestListenTunnel_DoubleListenForSameClient(t *testing.T) {
 	err = cli.Send(pdu.Marshal(command.NewListenTunnel("TunnelDoubleListen")))
 	require.NoError(t, err)
 
-	shouldReceiveNackBefore(t, cli, 100*time.Millisecond)
+	shouldReceiveAckBefore(t, cli, 100*time.Millisecond)
 }

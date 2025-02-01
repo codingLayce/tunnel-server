@@ -1,54 +1,71 @@
 package tunnel
 
 import (
-	"fmt"
+	"context"
 	"sync"
+
+	"github.com/codingLayce/tunnel.go/common/maps"
 )
 
 type Broadcaster struct {
 	name      string
-	listeners map[string]func(msg string)
+	listeners *maps.SyncMap[string, Listener]
+	messages  chan Message
 
-	mtx sync.Mutex
+	ctx    context.Context
+	stopFn context.CancelFunc
+	wg     sync.WaitGroup
 }
 
-func NewBroadcaster(name string) *Broadcaster {
-	return &Broadcaster{
+func newBroadcaster(name string) *Broadcaster {
+	ctx, cancel := context.WithCancel(context.Background())
+	b := &Broadcaster{
 		name:      name,
-		listeners: make(map[string]func(msg string)),
+		listeners: maps.NewSyncMap[string, Listener](),
+		messages:  make(chan Message),
+		ctx:       ctx,
+		stopFn:    cancel,
 	}
+	go b.start()
+	return b
 }
 
-func (b *Broadcaster) PublishMessage(senderID, msg string) {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	for listenerID, listener := range b.listeners {
-		if listenerID == senderID {
-			continue
-		}
-		listener(msg)
-		// TODO: Maybe manage here net.Conn and timeout/retry mechanism
-	}
-}
-
-func (b *Broadcaster) Name() string {
-	return b.name
-}
-
-func (b *Broadcaster) RegisterListener(id string, callback func(tunnelName, msg string)) error {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	if _, ok := b.listeners[id]; ok {
-		return fmt.Errorf("listener already exists")
-	}
-	b.listeners[id] = func(msg string) {
-		callback(b.name, msg)
-	}
-	return nil
+func (b *Broadcaster) RegisterListener(listener Listener) {
+	b.listeners.Put(listener.ID(), listener)
 }
 
 func (b *Broadcaster) UnregisterListener(id string) {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	delete(b.listeners, id)
+	b.listeners.Delete(id)
+}
+
+func (b *Broadcaster) PublishMessage(msg Message) {
+	select {
+	case b.messages <- msg:
+	case <-b.ctx.Done():
+	}
+}
+
+func (b *Broadcaster) start() {
+	b.wg.Add(1)
+	defer b.wg.Done()
+
+	for {
+		select {
+		case msg := <-b.messages:
+			b.listeners.Foreach(func(id string, listener Listener) {
+				if msg.SenderID == id {
+					return
+				}
+				// TODO: goroutine for each listener
+				listener.NotifyMessage(b.name, msg.Msg)
+			})
+		case <-b.ctx.Done():
+			return
+		}
+	}
+}
+
+func (b *Broadcaster) Stop() {
+	b.stopFn()
+	b.wg.Wait()
 }

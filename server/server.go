@@ -3,12 +3,14 @@ package server
 import (
 	"sync"
 
+	"github.com/codingLayce/tunnel-server/tunnel"
 	"github.com/codingLayce/tunnel.go/tcp"
 )
 
 type Server struct {
 	internal *tcp.Server
 
+	// TODO: Migrate to maps.SyncMap
 	clients map[string]*serverClient
 
 	mtx sync.Mutex
@@ -54,6 +56,7 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() {
 	s.internal.Stop()
+	tunnel.StopTunnels()
 }
 
 func (s *Server) Addr() string {
