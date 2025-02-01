@@ -1,8 +1,12 @@
 = Tunnel-server
 
-Tunnel-server a server that manages `Tunnels`. A `Tunnel` is a pool of data where clients can listen to and pull the stored messages.
+Tunnel-server a server that manages `Tunnels`.
+
+A `Tunnel` is a pipe were clients can send messages to and they will be dispatched to the listeners.
 
 Tunnel uses a custom protocol based on top of `tcp`. For more details, see the `https://github.com/codingLayce/tunnel.go` repository.
+
+The server is meant to be accessed by the `github.com/codingLayce/tunnel.go` client-sdk.
 
 == Usage
 
@@ -12,3 +16,11 @@ Starts a Tunnel server.
 ----
 tunnel
 ----
+
+== Features
+
+* Accepts clients
+* Allows clients to creates Broadcast Tunnels
+* Allows clients to publish message to a Tunnel
+* Allows clients to listen to a Tunnel
+** Broadcast messages published to a Broadcast Tunnel (except for the sender if it listens to it)
