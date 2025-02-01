@@ -4,11 +4,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/codingLayce/tunnel-server/tunnel"
 	"github.com/codingLayce/tunnel.go/common/maps"
 	"github.com/codingLayce/tunnel.go/pdu"
 	"github.com/codingLayce/tunnel.go/pdu/command"
 	"github.com/codingLayce/tunnel.go/tcp"
+
+	"github.com/codingLayce/tunnel-server/tunnel"
 )
 
 var MessageAckTimeout = 10 * time.Second

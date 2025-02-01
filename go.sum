@@ -1,3 +1,5 @@
+github.com/codingLayce/tunnel.go v0.1.0 h1:37/wJ52gZvc9p85VupG77wOd4N7h4HMx9/T5+K2bWAs=
+github.com/codingLayce/tunnel.go v0.1.0/go.mod h1:HBLa7BRaNKzQotZsAJq7MgRZ/eqLaGYSiYUrTCHO7WQ=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
